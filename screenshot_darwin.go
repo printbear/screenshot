@@ -7,9 +7,9 @@ import (
 	// #include <CoreFoundation/CoreFoundation.h>
 	"C"
 	"image"
+	"math"
 	"reflect"
 	"unsafe"
-	"math"
 )
 
 func ScreenRect() (image.Rectangle, error) {
@@ -29,11 +29,13 @@ func CaptureScreen() (*image.RGBA, error) {
 
 func CaptureRect(rect image.Rectangle) (*image.RGBA, error) {
 	displayID := C.CGMainDisplayID()
-	width := int(math.Ceil(float64(C.CGDisplayPixelsWide(displayID))/16)*16)
-	rawData := C.CGDataProviderCopyData(C.CGImageGetDataProvider(C.CGDisplayCreateImage(displayID)))
+	width := int(math.Ceil(float64(C.CGDisplayPixelsWide(displayID))/16) * 16)
+	cgImage := C.CGDisplayCreateImage(displayID)
+	cgDataProvider := C.CGImageGetDataProvider(cgImage)
+	cgRawData := C.CGDataProviderCopyData(cgDataProvider)
 
-	length := int(C.CFDataGetLength(rawData))
-	ptr := unsafe.Pointer(C.CFDataGetBytePtr(rawData))
+	length := int(C.CFDataGetLength(cgRawData))
+	ptr := unsafe.Pointer(C.CFDataGetBytePtr(cgRawData))
 
 	var slice []byte
 	hdrp := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
@@ -47,7 +49,9 @@ func CaptureRect(rect image.Rectangle) (*image.RGBA, error) {
 		imageBytes[i], imageBytes[i+2], imageBytes[i+1], imageBytes[i+3] = slice[i+2], slice[i], slice[i+1], slice[i+3]
 	}
 
-	C.CFRelease(C.CFTypeRef(rawData))
+	C.CFRelease(C.CFTypeRef(cgRawData))
+	C.CFRelease(C.CFTypeRef(cgDataProvider))
+	C.CFRelease(C.CFTypeRef(cgImage))
 
 	img := &image.RGBA{Pix: imageBytes, Stride: 4 * width, Rect: rect}
 	return img, nil
